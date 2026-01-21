@@ -1,9 +1,15 @@
-name: 1. Daily Real Estate Marketing
+name: 1. Manual & Auto
 
 on:
   schedule:
     - cron: '0 9 * * *'  # Roz Subah 9 Baje (UTC Time)
-  workflow_dispatch:      # Manual Button
+  
+  workflow_dispatch:      # Manual Trigger Button
+    inputs:
+      target_email:
+        description: 'Manual Send: Enter Email (Leave empty for Daily Run)'
+        required: false
+        default: ''
 
 jobs:
   run-marketing:
@@ -17,7 +23,7 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
       
-      - name: Run Daily Marketing
+      - name: Run Automation
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
@@ -26,4 +32,14 @@ jobs:
           TELEGRAM_BOT_PAY_TOKEN: ${{ secrets.TELEGRAM_BOT_PAY_TOKEN }}
           CHAT_ID_MSG: ${{ secrets.CHAT_ID_MSG }}
           CHAT_ID_PAY: ${{ secrets.CHAT_ID_PAY }}
-        run: python main.py --daily  # <-- Sirf Daily Mode chalega
+        run: |
+          # Logic: Agar Email Input diya hai, to Manual Trigger chalao
+          if [ "${{ github.event.inputs.target_email }}" != "" ]; then
+            echo "🚀 Manual Mode Activated for: ${{ github.event.inputs.target_email }}"
+            python manual_trigger.py "${{ github.event.inputs.target_email }}"
+          
+          # Agar Input Khali hai (Scheduled Run), to Daily Marketing chalao
+          else
+            echo "📅 Daily Routine Mode Activated"
+            python main.py --daily
+          fi
