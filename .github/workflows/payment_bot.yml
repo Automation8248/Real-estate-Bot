@@ -1,0 +1,29 @@
+name: 2. Payment & Subscription Check
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'  # Har 12 Ghante mein (e.g. 12 AM aur 12 PM)
+  workflow_dispatch:        # Manual Button
+
+jobs:
+  run-payments:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Run Payment Check
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          TELEGRAM_BOT_MSG_TOKEN: ${{ secrets.TELEGRAM_BOT_MSG_TOKEN }}
+          TELEGRAM_BOT_PAY_TOKEN: ${{ secrets.TELEGRAM_BOT_PAY_TOKEN }}
+          CHAT_ID_MSG: ${{ secrets.CHAT_ID_MSG }}
+          CHAT_ID_PAY: ${{ secrets.CHAT_ID_PAY }}
+        run: python main.py --payments  # <-- Sirf Payment Mode chalega
