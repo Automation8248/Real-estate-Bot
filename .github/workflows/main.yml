@@ -1,25 +1,39 @@
-name: Daily Real Estate Bot
+name: Manual & Daily Bot
+
 on:
   schedule:
-    - cron: '0 9 * * *'  # Daily 9:00 AM UTC
-  workflow_dispatch:      # Button to run manually
+    - cron: '0 9 * * *'  # Daily automatic run
+  workflow_dispatch:      # Manual Button with Input
+    inputs:
+      target_email:
+        description: 'Kis email par test karna hai?'
+        required: true
+        default: 'test@example.com'
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.9'
-      - name: Install Libraries
+      - name: Install Dependencies
         run: pip install -r requirements.txt
-      - name: Run Automation
+      
+      - name: Run Script
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           TELEGRAM_BOT_MSG_TOKEN: ${{ secrets.TELEGRAM_BOT_MSG_TOKEN }}
-          PAYPAL_EMAIL: "singhlalan8248@gmail.com"
-        run: python main.py
+          # Agar manual input hai to manual script chalega, nahi to daily wala
+        run: |
+          if [ "${{ github.event.inputs.target_email }}" != "" ]; then
+            echo "Running Manual Test for ${{ github.event.inputs.target_email }}"
+            python manual_trigger.py "${{ github.event.inputs.target_email }}"
+          else
+            echo "Running Daily Automation"
+            python main.py
+          fi
