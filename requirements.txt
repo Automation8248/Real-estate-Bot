@@ -5,3 +5,4 @@ secure-smtplib
 schedule
 python-telegram-bot
 beautifulsoup4
+python-dotenv  <-- Ye naya add karna hai
