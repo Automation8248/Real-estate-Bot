@@ -1,0 +1,29 @@
+name: 1. Daily Real Estate Marketing
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Roz Subah 9 Baje (UTC Time)
+  workflow_dispatch:      # Manual Button
+
+jobs:
+  run-marketing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Run Daily Marketing
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          TELEGRAM_BOT_MSG_TOKEN: ${{ secrets.TELEGRAM_BOT_MSG_TOKEN }}
+          TELEGRAM_BOT_PAY_TOKEN: ${{ secrets.TELEGRAM_BOT_PAY_TOKEN }}
+          CHAT_ID_MSG: ${{ secrets.CHAT_ID_MSG }}
+          CHAT_ID_PAY: ${{ secrets.CHAT_ID_PAY }}
+        run: python main.py --daily  # <-- Sirf Daily Mode chalega
