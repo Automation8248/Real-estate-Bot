@@ -1,76 +1,89 @@
 import pandas as pd
-from datetime import datetime, timedelta
+import sys
+import os
 from core.scraper import scrape_leads_tier1
-from core.ai_agent import generate_cold_email
 from core.email_manager import send_email
+from core.ai_agent import generate_cold_email
 from core.telegram_bot import send_msg_alert
+# New Modules Import
+from core.payment_listener import check_new_payments
+from core.subscription_manager import fulfill_subscriptions
+
+# --- CONFIG ---
+DAILY_SCRAPE_TARGET = 500
+DAILY_EMAIL_TARGET = 15
 
 def daily_workflow():
-    # --- PART 1: DAILY LEAD SCRAPING ---
-    print("Scraping Leads...")
-    # (Scraping logic same as before)
+    print("--- STARTING AUTOMATION ---")
     
-    # --- PART 2: SEND NEW EMAILS (15/Day) ---
-    targets = pd.read_csv('data/business_targets.csv')
-    
-    # Load history properly with dates
+    # STEP 1: Scrape New Leads
+    # (Yeh daily stock banayega jo subscribers aur free samples mein use hoga)
+    print("1. Scraping Leads...")
     try:
-        history = pd.read_csv('data/history.csv')
-        history['date'] = pd.to_datetime(history['date'])
-    except:
-        history = pd.DataFrame(columns=['email', 'date', 'status'])
+        new_leads = scrape_leads_tier1(count=DAILY_SCRAPE_TARGET)
+        # Append to master file
+        header = not os.path.exists('data/scraped_leads.csv')
+        new_leads.to_csv('data/scraped_leads.csv', mode='a', header=header, index=False)
+        send_msg_alert(f"✅ Scraped {len(new_leads)} new leads.")
+    except Exception as e:
+        print(f"Scraping Error: {e}")
 
-    # Send 15 new emails
-    # ... (Same logic as before for sending new emails) ...
-    
-    # --- PART 3: FOLLOW-UP LOGIC (New Addition) ---
-    print("Checking for follow-ups...")
-    
-    # Load replied users list
+    # STEP 2: Check Payments (Priority)
+    # (Agar kisi ne abhi pay kiya hai, usse list mein add karo)
+    print("2. Checking Payments...")
     try:
-        replied_users = pd.read_csv('data/replied_users.csv', header=None)[0].tolist()
-    except:
-        replied_users = []
+        check_new_payments()
+    except Exception as e:
+        print(f"Payment Listener Error: {e}")
 
-    today = datetime.now()
-    four_days_ago = today - timedelta(days=4)
+    # STEP 3: Fulfill Subscriptions
+    # (Jo naye add huye ya jinka week pura hua, unhe leads bhejo)
+    print("3. Fulfilling Subscriptions...")
+    try:
+        fulfill_subscriptions()
+    except Exception as e:
+        print(f"Subscription Manager Error: {e}")
 
-    # Filter: Sent 4+ days ago AND Status is 'sent' (not 'followup_sent')
-    # Note: Logic assumes history has columns: email, date, status
-    
-    for index, row in history.iterrows():
-        sent_date = row['date']
-        email = row['email']
-        status = row['status'] # 'sent' or 'followup_sent'
+    # STEP 4: Cold Outreach (Marketing)
+    # (Naye logo ko pitch karo)
+    print("4. Sending Marketing Emails...")
+    try:
+        targets = pd.read_csv('data/business_targets.csv')
         
-        # Check condition: 4 din ho gaye + Reply nahi aaya + Follow-up nahi bheja
-        if sent_date.date() == four_days_ago.date() and \
-           email not in replied_users and \
-           status != 'followup_sent':
-            
-            # Send Follow-up Email
-            subject = "Quick question regarding real estate leads"
-            body = f"""Hi,
-            
-I'm writing to follow up on my previous email. I wanted to ensure you didn't miss the opportunity to test 2 free verified leads from Estavox.
+        # Load History
+        if os.path.exists('data/history.csv'):
+            history = pd.read_csv('data/history.csv')
+        else:
+            history = pd.DataFrame(columns=['email', 'date', 'status'])
+        
+        # Filter fresh targets (Not in history)
+        fresh_targets = targets[~targets['email'].isin(history['email'])].head(DAILY_EMAIL_TARGET)
 
-Are you open to seeing the quality?
-
-Best,
-Lalan Singh
-Estavox
-"""
+        for index, row in fresh_targets.iterrows():
+            email = row['email']
+            name = row['name']
+            
+            # Generate AI Email
+            email_body = generate_cold_email(name)
+            
+            # Send
             try:
-                send_email(email, subject, body)
-                # Update status in history (In real DB use SQL, here we just alert)
-                send_msg_alert(f"🔄 Follow-up sent to {email}")
-                # Mark as done in CSV (Simplistic approach)
-                history.at[index, 'status'] = 'followup_sent'
+                send_email(email, "Collaboration Opportunity - Estavox", email_body)
+                
+                # Update History
+                new_record = {'email': email, 'date': pd.Timestamp.now(), 'status': 'sent'}
+                history = pd.concat([history, pd.DataFrame([new_record])], ignore_index=True)
+                
             except Exception as e:
-                print(f"Failed follow-up: {e}")
+                print(f"Failed to send to {email}: {e}")
+        
+        # Save History
+        history.to_csv('data/history.csv', index=False)
+        
+    except Exception as e:
+        print(f"Marketing Error: {e}")
 
-    # Save updated history
-    history.to_csv('data/history.csv', index=False)
+    print("--- WORKFLOW COMPLETE ---")
 
 if __name__ == "__main__":
     daily_workflow()
