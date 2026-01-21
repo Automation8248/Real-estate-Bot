@@ -4,17 +4,31 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-client = InferenceClient(model="Qwen/Qwen2.5-72B-Instruct", token=os.getenv("HF_TOKEN"))
+# Client initialize
+client = InferenceClient(api_key=os.getenv("HF_TOKEN"))
 
 def generate_cold_email(business_name):
     prompt = f"""
     Write a short, professional cold email to {business_name}, a real estate business.
     Offer them high-quality real estate leads from Tier 1 countries.
     Ask a simple question: 'Would you be interested in seeing 2 free sample leads?'
-    Keep it under 100 words.
+    Keep it under 100 words. Do not include subject line in the body.
     """
-    response = client.text_generation(prompt, max_new_tokens=200)
-    return response
+    
+    # OLD ERROR LINE: response = client.text_generation(...)
+    # NEW CORRECT LINE (Chat Format):
+    messages = [
+        {"role": "user", "content": prompt}
+    ]
+    
+    response = client.chat_completion(
+        model="Qwen/Qwen2.5-72B-Instruct",
+        messages=messages,
+        max_tokens=200
+    )
+    
+    # Response se text nikalna
+    return response.choices[0].message.content
 
 def analyze_reply(email_body):
     """
@@ -31,5 +45,15 @@ def analyze_reply(email_body):
     
     Only output the single word.
     """
-    response = client.text_generation(prompt, max_new_tokens=10)
-    return response.strip()
+    
+    messages = [
+        {"role": "user", "content": prompt}
+    ]
+    
+    response = client.chat_completion(
+        model="Qwen/Qwen2.5-72B-Instruct",
+        messages=messages,
+        max_tokens=10
+    )
+    
+    return response.choices[0].message.content.strip()
