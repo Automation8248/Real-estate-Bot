@@ -1,0 +1,7 @@
+pandas
+requests
+huggingface_hub
+secure-smtplib
+schedule
+python-telegram-bot
+beautifulsoup4
