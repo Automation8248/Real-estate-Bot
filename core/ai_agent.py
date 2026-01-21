@@ -4,22 +4,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Client initialize
 client = InferenceClient(api_key=os.getenv("HF_TOKEN"))
 
 def generate_cold_email(business_name):
     prompt = f"""
-    Write a short, professional cold email to {business_name}, a real estate business.
-    Offer them high-quality real estate leads from Tier 1 countries.
-    Ask a simple question: 'Would you be interested in seeing 2 free sample leads?'
-    Keep it under 100 words. Do not include subject line in the body.
+    Write a short, professional B2B cold email to {business_name}.
+    
+    My Offer: High-quality, verified real estate leads (do not use the phrase 'Tier 1 countries', use 'premium markets' instead).
+    My Goal: Ask if they want 2 free sample leads to test quality.
+    
+    Tone: Professional, direct, no fake promises.
+    
+    Sign off exactly as:
+    Lalan Singh
+    Founder, Estavox
     """
     
-    # OLD ERROR LINE: response = client.text_generation(...)
-    # NEW CORRECT LINE (Chat Format):
-    messages = [
-        {"role": "user", "content": prompt}
-    ]
+    messages = [{"role": "user", "content": prompt}]
     
     response = client.chat_completion(
         model="Qwen/Qwen2.5-72B-Instruct",
@@ -27,33 +28,6 @@ def generate_cold_email(business_name):
         max_tokens=200
     )
     
-    # Response se text nikalna
     return response.choices[0].message.content
 
-def analyze_reply(email_body):
-    """
-    Decides the intent of the user.
-    Returns: 'INTERESTED', 'BUY', 'NOT_INTERESTED', or 'OTHER'
-    """
-    prompt = f"""
-    Analyze this email reply from a client: "{email_body}"
-    
-    1. If they want to see samples or say yes, output: INTERESTED
-    2. If they ask for price, subscription, or how to pay, output: BUY
-    3. If they say no or stop, output: NOT_INTERESTED
-    4. Otherwise: OTHER
-    
-    Only output the single word.
-    """
-    
-    messages = [
-        {"role": "user", "content": prompt}
-    ]
-    
-    response = client.chat_completion(
-        model="Qwen/Qwen2.5-72B-Instruct",
-        messages=messages,
-        max_tokens=10
-    )
-    
-    return response.choices[0].message.content.strip()
+# analyze_reply function waisa hi rahega, kyunki ab hum har reply par same action le rahe hain.
