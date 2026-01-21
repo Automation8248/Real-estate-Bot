@@ -1,1 +1,25 @@
+name: Daily Real Estate Bot
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Daily 9:00 AM UTC
+  workflow_dispatch:      # Button to run manually
 
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install Libraries
+        run: pip install -r requirements.txt
+      - name: Run Automation
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          TELEGRAM_BOT_MSG_TOKEN: ${{ secrets.TELEGRAM_BOT_MSG_TOKEN }}
+          PAYPAL_EMAIL: "singhlalan8248@gmail.com"
+        run: python main.py
