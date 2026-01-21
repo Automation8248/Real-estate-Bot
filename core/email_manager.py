@@ -1,8 +1,11 @@
 import smtplib
 import pandas as pd
+import os                   # <--- YE LINE MISSING HAI, ISE ADD KAREIN
 from email.mime.text import MIMEText
 from core.ai_agent import analyze_reply
 from core.telegram_bot import send_msg_alert
+
+# Baaki code waisa hi rahega...
 
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
