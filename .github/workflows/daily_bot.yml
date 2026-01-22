@@ -2,7 +2,7 @@ name: 1. Manual & Auto
 
 on:
   schedule:
-    - cron: '0 9 * * *'  # Roz Subah 9 Baje (UTC Time)
+   - cron: '5 13 * * *'  # Roz Dopahar 1:05 PM (UTC Time)
   
   workflow_dispatch:      # Manual Trigger Button
     inputs:
