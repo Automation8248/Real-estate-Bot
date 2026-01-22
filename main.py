@@ -9,112 +9,175 @@ from core.telegram_bot import send_msg_alert
 from core.payment_listener import check_new_payments
 from core.subscription_manager import fulfill_subscriptions
 
-# CONFIG
-DAILY_SCRAPE_TARGET = 500
-DAILY_EMAIL_TARGET = 15
+# --- CONFIGURATION ---
+DAILY_SCRAPE_TARGET = 500  # Roz 500 naye leads jodege
+DAILY_EMAIL_TARGET = 15    # Roz sirf 15 ko email (Safety ke liye)
+
+def load_history():
+    """History load karo taaki duplicates check kar sakein"""
+    if os.path.exists('data/history.csv'):
+        return pd.read_csv('data/history.csv')
+    else:
+        return pd.DataFrame(columns=['email', 'date', 'status'])
 
 def run_daily_marketing():
-    print("--- MODE: DAILY MARKETING & FOLLOW-UPS ---")
+    print("--- 🚀 MODE: DAILY MARKETING OPERATION ---")
     
-    # 1. Scrape
-    try:
-        new_leads = scrape_leads_tier1(count=DAILY_SCRAPE_TARGET)
-        header = not os.path.exists('data/scraped_leads.csv')
-        new_leads.to_csv('data/scraped_leads.csv', mode='a', header=header, index=False)
-        send_msg_alert(f"✅ Daily Scrape: {len(new_leads)} leads.")
-    except Exception as e:
-        print(f"Scrape Error: {e}")
+    # --- STEP 1: COLLECT LEADS (Real Data) ---
+    print("1️⃣ Collecting Data from Google Maps Source...")
+    scrape_leads_tier1(count=DAILY_SCRAPE_TARGET)
 
-    # 2. Marketing Emails
+    # --- STEP 2: LOAD & FILTER (Anti-Spam) ---
+    print("2️⃣ Filtering Data (Removing Duplicates & No-Reply)...")
+    
     try:
-        targets = pd.read_csv('data/business_targets.csv')
-        if os.path.exists('data/history.csv'):
-            history = pd.read_csv('data/history.csv')
-        else:
-            history = pd.DataFrame(columns=['email', 'date', 'status'])
+        all_leads = pd.read_csv('data/scraped_leads.csv')
+        history = load_history()
         
-        fresh_targets = targets[~targets['email'].isin(history['email'])].head(DAILY_EMAIL_TARGET)
+        # Fast Filtering Set
+        sent_emails_set = set(history['email'].astype(str).str.lower().tolist())
+        
+        # Load Replied Users (Inko pareshan nahi karna)
+        try:
+            replied_users = set(pd.read_csv('data/replied_users.csv', header=None)[0].astype(str).str.lower().tolist())
+        except:
+            replied_users = set()
 
-        for index, row in fresh_targets.iterrows():
-            email = row['email']
-            name = row['name']
+    except Exception as e:
+        print(f"❌ Data Load Error: {e}")
+        return
+
+    targets_to_send = []
+    # Block List (Fake Emails)
+    block_keywords = ['no-reply', 'noreply', 'donotreply', 'newsletter', 'admin', 'support', 'help', 'info']
+
+    # Reverse loop (Latest leads pehle uthao)
+    for index, row in all_leads.iloc[::-1].iterrows():
+        email = str(row['email']).lower().strip()
+        name = row['name']
+        
+        # FILTER 1: History Check (Sent before?)
+        if email in sent_emails_set:
+            continue
+            
+        # FILTER 2: Reply Check (Replied before?)
+        if email in replied_users:
+            continue
+            
+        # FILTER 3: Junk Email Check
+        if any(keyword in email for keyword in block_keywords):
+            continue
+            
+        # Valid Target Found
+        targets_to_send.append({'email': email, 'name': name})
+        
+        if len(targets_to_send) >= DAILY_EMAIL_TARGET:
+            break
+    
+    print(f"✅ Found {len(targets_to_send)} fresh, unique targets for today.")
+
+    # --- STEP 3: SEND EMAILS ---
+    if targets_to_send:
+        for target in targets_to_send:
+            email = target['email']
+            name = target['name']
+            
+            # AI writes safe greeting email (No Names)
             body = generate_cold_email(name)
             
             try:
-                send_email(email, "Collaboration Opportunity - Estavox", body)
-                new_record = {'email': email, 'date': datetime.now().strftime('%Y-%m-%d'), 'status': 'sent'}
-                history = pd.concat([history, pd.DataFrame([new_record])], ignore_index=True)
-            except Exception as e:
-                print(f"Send Failed: {e}")
-        
-        history.to_csv('data/history.csv', index=False)
-        
-    except Exception as e:
-        print(f"Marketing Error: {e}")
-
-    # 3. FOLLOW-UP LOGIC (4 DAYS) -- [RE-IMPLEMENTED]
-    print("3. Checking Follow-ups...")
-    try:
-        history = pd.read_csv('data/history.csv')
-        try:
-            replied = pd.read_csv('data/replied_users.csv', header=None)[0].tolist()
-        except:
-            replied = []
-            
-        today = datetime.now()
-        
-        for index, row in history.iterrows():
-            try:
-                sent_date = datetime.strptime(row['date'], '%Y-%m-%d')
-                days_diff = (today - sent_date).days
+                send_email(email, "Partnership Opportunity", body)
                 
-                # Agar 4 din ho gaye + Reply nahi aaya + Status 'sent' hai
-                if days_diff >= 4 and row['email'] not in replied and row['status'] == 'sent':
-                    
-                    follow_body = """Hi,
-                    
-Checking if you saw my previous email regarding verified real estate leads?
-I'd love to send you 2 free samples to prove the quality.
+                # Update History Immediately
+                new_record = {
+                    'email': email, 
+                    'date': datetime.now().strftime('%Y-%m-%d'), 
+                    'status': 'sent'
+                }
+                history = pd.concat([history, pd.DataFrame([new_record])], ignore_index=True)
+                sent_emails_set.add(email) # Add to current set to avoid repeat in same run
+                
+            except Exception as e:
+                print(f"❌ Failed to send to {email}: {e}")
 
-Let me know if you are interested.
+        # Save History File
+        history.to_csv('data/history.csv', index=False)
+        send_msg_alert(f"✅ Daily Task Done: {len(targets_to_send)} Emails Sent.")
+    else:
+        print("⚠️ No new targets found. Check Scraper.")
+
+    # --- STEP 4: FOLLOW-UP LOGIC (4 Days) ---
+    print("3️⃣ Checking for Follow-ups (4-Day Rule)...")
+    check_followups(history, replied_users)
+
+def check_followups(history, replied_users_set):
+    today = datetime.now()
+    updated = False
+    
+    for index, row in history.iterrows():
+        try:
+            sent_date = datetime.strptime(row['date'], '%Y-%m-%d')
+            days_diff = (today - sent_date).days
+            email = str(row['email']).lower()
+            
+            # Condition: 4 din ho gaye + Reply nahi aaya + Status 'sent' hai
+            if days_diff >= 4 and email not in replied_users_set and row['status'] == 'sent':
+                
+                print(f"🔄 Sending Follow-up to {email}...")
+                follow_body = """Hello,
+
+I'm writing to follow up on my previous email. I wanted to ensure you didn't miss the opportunity to test 2 free verified leads.
+
+Are you open to seeing the quality?
 
 Best,
 Lalan Singh
-Estavox
+Founder, Estavox
 """
-                    send_email(row['email'], "Quick Follow-up: Estavox Leads", follow_body)
+                try:
+                    send_email(email, "Quick Follow-up", follow_body)
                     history.at[index, 'status'] = 'followup_sent'
-                    print(f"🔄 Follow-up sent to {row['email']}")
-            except:
-                continue
-                
+                    updated = True
+                except Exception as e:
+                    print(f"Follow-up failed: {e}")
+        except:
+            continue
+    
+    if updated:
         history.to_csv('data/history.csv', index=False)
-    except Exception as e:
-        print(f"Follow-up Error: {e}")
+        print("✅ Follow-ups updated.")
 
 def run_payment_checks():
-    print("--- MODE: PAYMENT CHECK & SUBSCRIPTION ---")
+    print("--- 💰 MODE: PAYMENT & SUBSCRIPTION CHECK ---")
     try:
-        check_new_payments() # Includes Reply Checks
+        # Check PayPal & Replies
+        check_new_payments() 
     except Exception as e:
-        print(f"Payment Error: {e}")
+        print(f"Payment Listener Error: {e}")
     
     try:
+        # Send Weekly Leads
         fulfill_subscriptions()
     except Exception as e:
-        print(f"Subs Error: {e}")
+        print(f"Subscription Error: {e}")
 
 if __name__ == "__main__":
-    # Logic for Manual vs Daily vs Payments
+    # Command Line Logic
     if len(sys.argv) > 1:
         mode = sys.argv[1]
+        
         if mode == "--payments":
             run_payment_checks()
+            
         elif mode == "--daily":
             run_daily_marketing()
+            
         else:
-            print("Unknown mode")
+            # Agar koi galat command de
+            print("Unknown mode. Running Full Check.")
+            run_payment_checks()
+            run_daily_marketing()
     else:
-        # Default Run (Runs everything if no flag)
+        # Default: Agar bina command ke run karein
         run_payment_checks()
         run_daily_marketing()
